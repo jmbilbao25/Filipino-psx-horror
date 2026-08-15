@@ -13,7 +13,7 @@ extends CharacterBody3D
 enum State { LURK, PATROL, INVESTIGATE, HUNT, ATTACK }
 
 const _NAME := ["lurk", "patrol", "investigate", "hunt", "attack"]
-const _SPEED := [2.2, 1.1, 1.8, 3.5, 7.0]
+const _SPEED := [2.2, 1.1, 1.8, 4.6, 7.0]  # HUNT > player RUN (4.3): no free escape
 const _GRAVITY := 18.0
 
 ## Sight range with no flashlight on us. Barangay at night: it is nearly blind.
@@ -27,7 +27,7 @@ const _GRAVITY := 18.0
 @export var hear_base := 4.0
 @export var hear_gain := 22.0
 ## Patrol wanders this far from where it spawned.
-@export var patrol_radius := 18.0
+@export var patrol_radius := 60.0
 ## Seconds it keeps charging the last known spot after losing the player.
 @export var hunt_grace := 1.6
 ## Pacing governor: no chase lasts longer than this.
@@ -154,8 +154,10 @@ func _sense(d: float) -> String:
 	if nv is float or nv is int:
 		n = float(nv)
 	if n > 0.05 and d < hear_base + hear_gain * n * n:
-		# heard, not seen: a rough bearing, not a fix
-		var fuzz := 3.0 * (1.0 - n)
+		# heard, not seen: a rough bearing, never a fix. The floor matters -- at
+		# noise 1.0 a bare (1.0 - n) is exactly 0, which handed over the player's
+		# precise position through solid geometry for as long as they kept running.
+		var fuzz := 2.0 + 4.0 * (1.0 - n)
 		last_known = _player.global_position + Vector3(randf_range(-fuzz, fuzz), 0, randf_range(-fuzz, fuzz))
 		# Sprinting is unmistakable: that is a chase, not a rustle worth a look.
 		return "heard_loud" if n > 0.8 else "heard"
@@ -219,9 +221,9 @@ func _lurk(delta: float, d: float, reason: String, saw: bool) -> void:
 		var p := _far_point()
 		if p != Vector3.INF:
 			_nav.target_position = p
+			_dwell = lurk_dwell  # only spend the dwell once a target actually exists
 			if debug_log:
 				print("[aswang] %5.1fs lurk: standing off at %.0fm, moving to %v" % [_clock, d, p.snappedf(0.1)])
-		_dwell = lurk_dwell
 
 
 func _patrol(d: float, reason: String, saw: bool) -> void:
@@ -340,10 +342,12 @@ func _lurch(delta: float) -> void:
 # ---------------------------------------------------------------- horror
 
 func _audio(delta: float, d: float) -> void:
-	var hunting := state == State.HUNT or state == State.ATTACK
 	# Folklore: the tik-tik gets QUIETER the closer it is. The audio piece owns
-	# the inversion; we owe it an honest distance, and INF when it is not hunting.
-	Sfx.set_aswang_distance(d if hunting else INF)
+	# the inversion; we owe it an honest distance ALWAYS.
+	# Gating this on "hunting" made the cue fire for 0 seconds of a 240 s night and
+	# made silence ambiguous: "not hunting" sounded identical to "right behind you".
+	# The call is the only channel that can carry tension while nothing happens.
+	Sfx.set_aswang_distance(d)
 
 	var want := 0.05
 	match state:
@@ -375,7 +379,12 @@ func _can_hunt(d: float) -> bool:
 ## Public: anything that makes a noise (a charm being lifted off a shrine)
 ## can point the aswang at it. Investigating is allowed even during the quiet.
 func hear_noise(pos: Vector3, strength := 1.0) -> void:
-	var fuzz := 3.0 * (1.0 - clampf(strength, 0.0, 1.0))
+	var st := clampf(strength, 0.0, 1.0)
+	# Same hearing model as _sense: without this check a charm lifted anywhere on
+	# the map summoned it from any distance, including across the whole barangay.
+	if global_position.distance_to(pos) > hear_base + hear_gain * st * st:
+		return
+	var fuzz := 2.0 + 4.0 * (1.0 - st)
 	last_known = pos + Vector3(randf_range(-fuzz, fuzz), 0, randf_range(-fuzz, fuzz))
 	if state == State.HUNT or state == State.ATTACK:
 		return

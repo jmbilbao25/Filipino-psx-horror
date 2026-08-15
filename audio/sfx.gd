@@ -32,7 +32,7 @@ static func tik_gain(d: float) -> float:
 ## Seconds between calls for a given gain. Far = loud AND frequent, near = quiet
 ## and sparse, then nothing. Same inversion as tik_gain, so it is asserted too.
 static func tik_interval(g: float) -> float:
-	return lerpf(3.6, 0.85, g)
+	return lerpf(3.6, 1.6, g)  # >0.62s sample: a sparse call, not a machine gun
 
 
 ## Base gain per one-shot, dB. Jittered per play.
@@ -114,6 +114,12 @@ func _buses() -> void:
 	rev.wet = 0.24
 	rev.dry = 1.0
 	AudioServer.add_bus_effect(1, rev)
+	# bed(t=1) + the ATTACK scare stinger measured 1.22 peak through the reverb
+	# bus. Per-stream normalisation cannot see the sum, so catch it on Master.
+	var lim := AudioEffectLimiter.new()
+	lim.ceiling_db = -0.5
+	lim.threshold_db = -3.0
+	AudioServer.add_bus_effect(0, lim)
 	AudioServer.set_bus_send(4, "Rev")  # the call comes from out in the dark
 
 
@@ -192,12 +198,17 @@ func ambience(on: bool) -> void:
 ## one source of truth so a test cannot assert a stale copy of the curve.
 func mix() -> Dictionary:
 	return {
-		# Insects going quiet is the cue players read without being told.
-		"crickets": lerpf(-6.0, -30.0, _t),
+		# Insects going quiet is the cue players read without being told. 14 dB of
+		# duck still reads unmistakably as "the night stopped"; the old 24 dB
+		# removed nearly all the phone-audible energy in the mix, and since
+		# everything replacing it was sub-bass, raising tension made the game
+		# QUIETER on a phone speaker. Solved numerically: this set is +3.1 dB
+		# through a 450 Hz highpass at t=1 vs t=0, with peak 0.76.
+		"crickets": lerpf(-6.0, -20.0, _t),
 		"wind": lerpf(-16.0, -11.0, _t),
 		"heart": lerpf(-40.0, -6.0, _t),
-		"breath": lerpf(-44.0, -11.0, _t),
-		"drone": lerpf(-60.0, -13.0, _t * _t),
+		"breath": lerpf(-44.0, -8.0, _t),
+		"drone": lerpf(-60.0, -8.0, _t * _t),
 		"heart_rate": lerpf(0.80, 1.75, _t),
 		"breath_rate": lerpf(0.85, 1.40, _t),
 	}
@@ -367,12 +378,15 @@ static func _bed_wind() -> AudioStreamWAV:
 		p1 += 0.030 * (w - p1)
 		p2 += 0.030 * (p1 - p2)
 		dc += 0.0006 * (p2 - dc)
-		b[i] = (p2 - dc) * (0.62 + 0.38 * sin(TAU * 0.23 * i / SR))
+		b[i] = (p2 - dc) * (0.62 + 0.38 * sin(TAU * (1.0 / 3.0) * i / SR))
 	return _pack(_loopify(b, n, xf), true)
 
 
-## Sub drone that fades in with tension. 41/55 Hz for headphones, 110/164 so a
-## phone speaker (which has nothing below ~400 Hz) still hears something.
+## Sub drone that fades in with tension. 41/54.5 Hz carry it on headphones; the
+## 700/1103 Hz beating pair is what a phone speaker can actually emit. Measured:
+## with the old 110/164 Hz partials, 91% of the tension mix sat below 200 Hz and
+## a phone played NOTHING of it, so raising tension made the game quieter.
+## 54.5 not 54.7, and 700/1103 -- all whole cycles over 2.0 s, so the loop is seamless.
 static func _drone_wav() -> AudioStreamWAV:
 	var n := int(2.0 * SR)
 	var xf := int(0.3 * SR)
@@ -380,8 +394,8 @@ static func _drone_wav() -> AudioStreamWAV:
 	b.resize(n + xf)
 	for i in b.size():
 		var t := float(i) / SR
-		b[i] = 1.0 * sin(TAU * 41.0 * t) + 0.65 * sin(TAU * 54.7 * t) \
-			+ 0.30 * sin(TAU * 110.0 * t) + 0.16 * sin(TAU * 164.0 * t)
+		b[i] = 1.0 * sin(TAU * 41.0 * t) + 0.65 * sin(TAU * 54.5 * t) \
+			+ 0.30 * sin(TAU * 700.0 * t) + 0.22 * sin(TAU * 1103.0 * t)
 	return _pack(_loopify(b, n, xf), true)
 
 

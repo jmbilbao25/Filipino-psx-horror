@@ -82,8 +82,64 @@ was *"roughly coin-flip (~55%)"*.
   lit literally nothing. The frames went from 90% pure black to ~75%, and the
   reference's signature hard elliptical floor pool appeared.
 
-## Known gaps (named by the critic, not yet closed)
+## Round 3 — the AI and audio critics, and what they broke
 
+Two more fresh-context critics were run, one on the aswang, one on the audio.
+Both were told to verify rather than trust, and both said **loses**. They were
+right, and they found ten real defects that every earlier check had missed —
+including checks written by the builders themselves.
+
+The AI critic instrumented its own copy and logged `|last_known - true player
+position|`, a number the shipped log never printed. That one measurement
+collapsed the whole design:
+
+| Defect | Evidence | Fixed |
+|---|---|---|
+| tik-tik gated behind `HUNT`, so the game's core tension instrument fired for **0 s of a 240 s night**, and silence meant both "nowhere near" and "right behind you" | `set_aswang_distance(d if hunting else INF)` | yes — pass the real distance always |
+| `fuzz = 3.0 * (1.0 - n)` is **exactly 0** at sprint, so it held a perfect fix through walls for 70 s straight, `los=false` | `lk_err= 0.00` every frame | yes — floor of 2 m, never a fix |
+| `hear_noise()` had **no range check**, so lifting a charm broadcast your exact position 50 m across the map | `lurk -> investigate d= 50.0m` | yes — same hearing model as sight |
+| `_home` set once at spawn, so `patrol_radius` fenced it into one corner; **two of three charms were risk-free** | closest approach 14.7 m in 240 s | yes — radius covers the map |
+| stood **frozen for the first 8 s** of every level: the dwell was spent even when the navmesh was not ready and no target got set | position identical t=0 → t=8 | yes — spend the dwell only once a target exists |
+| player `RUN` 4.3 beat `HUNT` 3.5, so any chase ended by holding sprint in a straight line | hunt ended in 3.6 s | yes — HUNT 4.6 |
+
+The audio critic re-measured everything independently and found the builder's
+own tests were partly **vacuous**: the footstep-distinctness assertion compared
+raw waveform correlation, which is always ~0 for different noise seeds and
+therefore cannot fail; the cricket test passed for any 4 kHz sine. Its central
+finding was worse than a bug:
+
+- **91% of the tension mix sat below 200 Hz.** A phone speaker reproduces almost
+  nothing under ~450 Hz, and the crickets ducked 24 dB to make room for it — so
+  **raising tension made the game measurably quieter on the target device**,
+  −2.7 to −4.2 dB. The mix reacted backwards to threat.
+- Master clipped on the jumpscare: `bed(t=1) + scare` peaked 1.22 through the
+  reverb bus. Per-stream normalisation cannot see a sum.
+- Three of five loops pumped audibly (wind −10.9 dB every 3 s) because their LFO
+  and partial periods did not divide the loop length.
+- `tik_interval(1.0) = 0.85 s` was shorter than the 0.62 s sample: 86% duty at
+  40 m, a machine gun rather than a sparse call.
+
+Fixed, and the fix was **solved numerically rather than guessed** — a search over
+candidate mixes for one that is louder through a phone highpass while keeping the
+insect duck as a readable cue:
+
+| Through | before | after |
+|---|---|---|
+| 300 Hz highpass | −2.7 dB | **+3.1 dB** |
+| 450 Hz highpass | −3.6 dB | **+2.7 dB** |
+| 600 Hz highpass | −4.2 dB | **+2.1 dB** |
+
+Insects still duck 14 dB, so the cue survives. Drone partials moved to 700/1103 Hz
+(whole cycles over the loop), wind LFO to 1/3 Hz, a limiter added to Master, and
+the tik interval widened past the sample length. Verified: the call now fires
+during LURK at 17.7 m and PATROL at 15.4 m — previously it never fired at all.
+
+## Known gaps (named by the critics, not yet closed)
+
+0. **The aswang is nearly invisible.** Measured: with the torch off, past ~10 m
+   it is numerically indistinguishable from not being there, and its emissive
+   eyes are sub-pixel at 320x180. This also silently disables the LURK
+   "gone when you look back" trick, which fired **zero times** in 240 s.
 1. **Interface rasteriser mismatch.** The touch buttons are anti-aliased vector
    glyphs at full display resolution sitting on top of a 320x180 upscaled world
    — two eras of rasteriser in one screen. The diegetic HUD does not have this
@@ -96,7 +152,12 @@ was *"roughly coin-flip (~55%)"*.
    `fog_depth_begin = 6` / `end = 34`.
 4. No volumetric beam in the air, so past ~20 m torch-on and torch-off look
    identical.
-5. Crickets are the weakest synthesised layer and the most exposed one.
+5. Crickets are a ring-modulated sine trill, not stridulation: 0% of energy
+   below 3 kHz, spectral flatness 0.0000, and one fixed 6 s pattern forever.
+6. No escalation: `aswang.gd` never reads `Game.charms`, so minute 10 plays
+   identically to minute 1.
+7. `scripts/game.gd` never sets `debug_log`, so the shipped game emits no AI
+   log — the only observable aswang is the one in the test scene.
 
 ## Rules in force
 
