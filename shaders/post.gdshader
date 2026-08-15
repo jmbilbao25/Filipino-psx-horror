@@ -18,6 +18,18 @@ uniform float vignette = 0.62;
 uniform float border = 0.055;     // black inset, in screen heights
 uniform float corner = 0.070;     // border corner radius
 
+// The 320x180 render target. Dither and grain lock to THIS grid, not to the
+// output resolution: chunky cells that survive the upscale, which is what we
+// want anyway, and it removes all dependence on the screen-pixel builtin.
+//
+// That builtin is only valid in a canvas_item shader that ALSO declares a
+// hint_screen_texture sampler. This one does not, so on mobile GLES it arrived
+// as 0 -> 1.0/0 = inf -> aspect = NaN -> the dither index and the CRT border's
+// step() both went undefined and the frame multiplied to black. Desktop GL
+// happened to set it, which is why this only ever broke on a real device.
+const vec2 LOWRES = vec2(320.0, 180.0);
+const float ASPECT = 16.0 / 9.0;
+
 const float BAYER[16] = float[16](
 	0.0, 8.0, 2.0, 10.0,
 	12.0, 4.0, 14.0, 6.0,
@@ -30,8 +42,7 @@ float hash(vec2 p) {
 }
 
 void fragment() {
-	vec2 px = 1.0 / SCREEN_PIXEL_SIZE;          // output resolution
-	float asp = px.x / px.y;
+	float asp = ASPECT;                         // the rig always shows 16:9
 	vec2 d = UV - 0.5;
 	float r2 = dot(d, d) * 4.0;                 // 0 centre .. ~1+ edges
 
@@ -50,7 +61,7 @@ void fragment() {
 	col *= mix(mix(cast_rest, cast_tense, tension), vec3(1.0), smoothstep(0.84, 1.0, l));
 
 	// -- ordered 4x4 Bayer dither, then posterise
-	vec2 dp = mod(floor(UV * px), 4.0);
+	vec2 dp = mod(floor(UV * LOWRES), 4.0);
 	float b = BAYER[int(dp.y) * 4 + int(dp.x)] / 16.0 - 0.46875;
 	col = floor(col * levels + b * dither) / levels;
 
@@ -62,7 +73,7 @@ void fragment() {
 
 	// -- animated grain, chunky (locked to the 320x180 grid)
 	// gated on signal so dead-black regions stay exactly #000000
-	vec2 gp = floor(UV * vec2(320.0, 180.0));
+	vec2 gp = floor(UV * LOWRES);
 	float lit = smoothstep(0.0, 0.03, max(col.r, max(col.g, col.b)));
 	col += (hash(gp + fract(TIME) * 91.7) - 0.5) * grain * lit * (1.0 + 2.0 * tension);
 

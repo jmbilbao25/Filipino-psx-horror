@@ -134,6 +134,38 @@ Insects still duck 14 dB, so the cue survives. Drone partials moved to 700/1103 
 the tik interval widened past the sample length. Verified: the call now fires
 during LURK at 17.7 m and PATROL at 15.4 m — previously it never fired at all.
 
+## Device bugs found by actually running it on a phone
+
+Neither of these could be caught by the offscreen harness, which is the honest
+limit of the whole verification setup: desktop GL is not mobile GLES.
+
+**1. Portrait instead of landscape.** `window/handheld/orientation=1` — I read 1
+as landscape. In Godot 4 the enum is `0 = Landscape`, `1 = Portrait`. Now 0, and
+verified in the built APK rather than in the source:
+`aapt2 dump xmltree` reports `android:screenOrientation=0`.
+
+**2. Black screen with scanlines rolling down it.** `post.gdshader` used
+`SCREEN_PIXEL_SIZE`, which in Godot is only valid in a `canvas_item` shader that
+**also declares a `hint_screen_texture` sampler**. This shader does not, so on
+mobile GLES it arrived as `0`:
+
+```
+px  = 1.0 / 0        = inf
+asp = inf / inf      = NaN
+mod(floor(UV * inf), 4.0)  -> NaN -> BAYER[undefined index]
+step(NaN, 0.0)             -> undefined -> col *= 0
+```
+
+Everything multiplied to black, with a handful of pixels surviving — exactly what
+the phone showed. Desktop GL happened to populate the builtin, which is why it
+rendered perfectly in every capture. Fixed by removing the dependence entirely:
+dither and grain now lock to a `const vec2 LOWRES = vec2(320.0, 180.0)`, which is
+what the effect wanted in the first place, and the border uses a `16.0 / 9.0`
+constant because the rig always presents a 16:9 image.
+
+Also added `stretch_mode = 5` (keep-aspect-centered) to the rig, so an odd screen
+letterboxes instead of stretching the 320x180 image over the whole panel.
+
 ## Known gaps (named by the critics, not yet closed)
 
 0. **The aswang is nearly invisible.** Measured: with the torch off, past ~10 m
