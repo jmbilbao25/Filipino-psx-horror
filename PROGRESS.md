@@ -166,6 +166,42 @@ constant because the rig always presents a 16:9 image.
 Also added `stretch_mode = 5` (keep-aspect-centered) to the rig, so an odd screen
 letterboxes instead of stretching the 320x180 image over the whole panel.
 
+## The SubViewport had to go (Adreno 618)
+
+The device evidence, which no desktop capture could ever have produced:
+
+```
+os=Android  gpu=Adreno (TM) 618  api=OpenGL ES 3.2 V@0502.0  window=(2400, 1080)
+post=OFF   -> still black
+tap        -> crash
+```
+
+`post=OFF` is the line that settled it. With the post shader bypassed entirely
+the screen was *still* black, so the shader was never the problem — the
+`SubViewport` + `ViewportTexture` was. The colour bars and text drawn on a plain
+`CanvasLayer` rendered perfectly the whole time, which proves the engine, the 2D
+canvas and text rendering were all healthy.
+
+Two guesses had already been spent on this (`vertex_lighting`, then
+`SCREEN_PIXEL_SIZE`). Both were real bugs; neither was *this* bug. The third
+attempt shipped telemetry instead of a fix, and that is what actually solved it.
+
+**The rewrite.** No SubViewport anywhere:
+
+| before | after |
+|---|---|
+| 3D + UI rendered into a 320x180 `SubViewport` | 3D renders to the main viewport; `World` is a plain `Control` fixed at 320x180 and **scaled** to the screen, so every child Control keeps its authored layout and no other scene needed editing |
+| blitted via a manual `ViewportTexture` | post reads the frame with `hint_screen_texture`, the supported path |
+| low resolution from the render target | low resolution from snapping the sample point to a 320x180 grid |
+| `SCREEN_PIXEL_SIZE`, invalid without a screen texture | `aspect` passed in as a uniform from the real viewport (a 2400x1080 phone is 2.22, not 16:9) |
+
+Verified before shipping: a Node3D still renders when its parent is a canvas node
+(841 orange samples in an isolated probe), so moving the 3D out of a SubViewport
+without reparenting anything was safe.
+
+Side benefit: the HUD and touch buttons now pass through the post chain, which
+closes the blind critic's "two different eras of rasteriser in one screen".
+
 ## Known gaps (named by the critics, not yet closed)
 
 0. **The aswang is nearly invisible.** Measured: with the torch off, past ~10 m

@@ -15,6 +15,10 @@ extends CanvasLayer
 
 const BONE := Color(0.9, 0.85, 0.7)
 
+## Anything a scene wants shown on the device. A phone has no console, so this is
+## the only channel for telemetry that does not need adb.
+static var extra := ""
+
 
 func _ready() -> void:
 	layer = 100

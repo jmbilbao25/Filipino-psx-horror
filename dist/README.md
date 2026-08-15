@@ -1,6 +1,12 @@
 # Download
 
-> **Build 4 is a diagnostic build.** A phone renders the game black while every
+> **Build 5 removes the SubViewport.** On an Adreno 618 the old 320x180
+> `SubViewport` + `ViewportTexture` rendered black even with post-processing
+> switched off, and it crashed on scene change. The low-resolution look is now
+> produced by reading the frame with `hint_screen_texture` and snapping the
+> sample point to a 320x180 grid, with no second render target at all.
+>
+> **Build 4 was a diagnostic build.** A phone renders the game black while every
 > offscreen desktop capture is correct, so the failure is in mobile GLES and
 > cannot be reproduced on the build machine. This build reports its own state
 > on screen, outside the two suspect layers, and lets you bypass the

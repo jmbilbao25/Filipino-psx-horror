@@ -24,7 +24,8 @@ func _ready() -> void:
 	add_child(Beacon.new())
 	_apply_plain()
 	($Rig as Node).call(&"set_tension", tension)
-	print("[screen] ", ($Rig as Node).call(&"report"))
+	Beacon.extra = ($Rig as Node).call(&"report")
+	print("[screen] ", Beacon.extra)
 	if sting != &"":
 		Sfx.play(sting)
 	if next_scene == "res://scenes/game.tscn":

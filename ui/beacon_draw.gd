@@ -29,9 +29,10 @@ func _draw() -> void:
 
 	var y := h + fs + 2.0
 	for line in [
-		"BARANGAY ASWANG  build 4",
+		"BARANGAY ASWANG  build 5  NO-SUBVIEWPORT",
 		"TAP = START      TAP TOP-RIGHT = PLAIN MODE",
 		"post=%s  %s" % ["OFF" if Game.plain else "ON", Beacon.info()],
+		Beacon.extra,
 	]:
 		_text(font, Vector2(6.0, y), line, fs)
 		y += fs + 3.0

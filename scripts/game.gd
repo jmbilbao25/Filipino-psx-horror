@@ -49,7 +49,8 @@ func _ready() -> void:
 	# from here, so the picture reddens and grains up as it closes on you.
 	Game.tension_changed.connect(Callable($Rig, "set_tension"))
 	Sfx.ambience(true)
-	print("[game] ", ($Rig as Node).call(&"report"))
+	Beacon.extra = ($Rig as Node).call(&"report")
+	print("[game] ", Beacon.extra)
 
 
 static func _far_from(points: Array[Vector3], from: Vector3) -> Vector3:

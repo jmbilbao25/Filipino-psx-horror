@@ -1,54 +1,76 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=4 format=3]
 
-; The low-res rig. All 3D content goes under the "World" SubViewport (320x180),
-; which is blown up to the screen with nearest-neighbour and run through
-; post.gdshader.
+; The PSX rig, with NO SubViewport.
 ;
-; Root is a Control, not a plain Node: `Screen` is a Control and anchors only
-; resolve reliably against a Control parent. Under a bare Node its rect came
-; from the viewport implicitly, which is one more thing that can differ between
-; desktop GL and mobile GLES.
+; It used to render the world into a 320x180 SubViewport and blit that through a
+; ViewportTexture. On an Adreno 618 (OpenGL ES 3.2) that produced a black screen
+; even with post-processing switched off, and putting 3D plus shadow-casting
+; lights inside the SubViewport also crashed the app. Desktop GL rendered it
+; perfectly, so it was invisible here.
+;
+; Instead:
+;   World  a plain Control, fixed at 320x180 and SCALED up to the screen. Child
+;          Controls therefore lay out against 320x180 exactly as before, so no
+;          other scene needed editing. Node3D children are unaffected by their
+;          parent's type -- they register with the viewport's World3D -- so the
+;          3D simply renders to the main viewport.
+;   Post   a ColorRect on a CanvasLayer above everything, reading the frame with
+;          hint_screen_texture and quantising to a 320x180 grid for the chunky
+;          low-resolution look. hint_screen_texture is the supported way to read
+;          the frame, and it is also what makes SCREEN_PIXEL_SIZE valid.
 
 [ext_resource type="Shader" path="res://shaders/post.gdshader" id="1_post"]
 
 [sub_resource type="GDScript" id="1_rig"]
 script/source = "extends Control
 
+## The virtual screen everything is authored against.
+const BASE := Vector2(320.0, 180.0)
+
+
+func _ready() -> void:
+	var vp := get_viewport()
+	vp.size_changed.connect(_fit)
+	_fit()
+
+
+## Keep the 320x180 canvas filling the real screen, whatever its size.
+func _fit() -> void:
+	var w := $World as Control
+	w.size = BASE
+	var vis := get_viewport().get_visible_rect().size
+	w.scale = vis / BASE
+	# The CRT border needs the REAL aspect: a 2400x1080 phone is 2.22, not 16:9.
+	var m: ShaderMaterial = ($Post/Screen as ColorRect).material
+	if m != null:
+		m.set_shader_parameter(&\"aspect\", vis.x / maxf(vis.y, 1.0))
+
+
 ## 0 = calm (warm amber), 1 = full tension (red cast, more grain and fringing).
 func set_tension(t: float) -> void:
-	var m: ShaderMaterial = ($Screen as TextureRect).material
+	var m: ShaderMaterial = ($Post/Screen as ColorRect).material
 	if m != null:
 		m.set_shader_parameter(&\"tension\", clampf(t, 0.0, 1.0))
 
 
-## Post-processing off = the raw 320x180 image, straight to the screen.
-## Exists because a real device rendered the whole post chain black while every
-## desktop capture was correct, and a bypass is the only way to tell from the
-## outside whether the shader or the viewport is at fault.
+## Post-processing off = the raw frame. Kept because a device rendered the whole
+## chain black while every desktop capture was correct, and a bypass is the only
+## way to tell from the outside which half is at fault.
 func set_post(on: bool) -> void:
-	var s := $Screen as TextureRect
-	if on:
-		if s.material == null:
-			var m := ShaderMaterial.new()
-			m.shader = load(\"res://shaders/post.gdshader\")
-			s.material = m
-	else:
-		s.material = null
+	($Post as CanvasLayer).visible = on
 
 
-## One line in logcat that says whether the chain is actually wired up.
+## One line that says whether the chain is actually wired up, on screen and in
+## logcat, because that is the only telemetry available from a device.
 func report() -> String:
-	var vp := $World as SubViewport
-	var s := $Screen as TextureRect
-	return \"rig: screen_size=%v vp_size=%v tex=%s mat=%s\" % [
-		s.size, vp.size, s.texture != null, s.material != null]
+	var w := $World as Control
+	return \"rig: world=%v scale=%v post=%s vis=%v\" % [
+		w.size, w.scale, ($Post as CanvasLayer).visible,
+		get_viewport().get_visible_rect().size]
 "
 
 [sub_resource type="ShaderMaterial" id="2_post"]
 shader = ExtResource("1_post")
-
-[sub_resource type="ViewportTexture" id="3_vp"]
-viewport_path = NodePath("World")
 
 [node name="PsxRig" type="Control"]
 anchors_preset = 15
@@ -59,24 +81,19 @@ grow_vertical = 2
 mouse_filter = 2
 script = SubResource("1_rig")
 
-[node name="World" type="SubViewport" parent="."]
-size = Vector2i(320, 180)
-render_target_update_mode = 3
-msaa_3d = 0
-screen_space_aa = 0
-use_taa = false
-use_debanding = false
-positional_shadow_atlas_size = 1024
+[node name="World" type="Control" parent="."]
+offset_right = 320.0
+offset_bottom = 180.0
+mouse_filter = 2
 
-[node name="Screen" type="TextureRect" parent="."]
-texture_filter = 1
-material = SubResource("2_post")
+[node name="Post" type="CanvasLayer" parent="."]
+layer = 50
+
+[node name="Screen" type="ColorRect" parent="Post"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-texture = SubResource("3_vp")
-expand_mode = 1
-stretch_mode = 5
+material = SubResource("2_post")
