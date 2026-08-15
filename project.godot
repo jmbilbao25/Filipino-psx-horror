@@ -1,0 +1,77 @@
+; Barangay Aswang - Filipino PSX horror
+config_version=5
+
+[application]
+config/name="Barangay Aswang"
+config/description="A Filipino folk-horror night in a barangay. PSX low-poly. Touch controls."
+run/main_scene="res://scenes/title.tscn"
+config/features=PackedStringArray("4.5", "GL Compatibility")
+boot_splash/show_image=false
+config/quit_on_go_back=false
+
+[autoload]
+Game="*res://scripts/game_state.gd"
+Sfx="*res://audio/sfx.gd"
+Capture="*res://scripts/capture.gd"
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+window/energy_saving/keep_screen_on=true
+
+[input_devices]
+pointing/emulate_touch_from_mouse=true
+
+[input]
+
+move_left={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":65,"pressed":true)]
+}
+move_right={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":68,"pressed":true)]
+}
+move_up={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":87,"pressed":true)]
+}
+move_down={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":83,"pressed":true)]
+}
+sprint={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194325,"pressed":true)]
+}
+flashlight={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":70,"pressed":true)]
+}
+interact={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":69,"pressed":true)]
+}
+ui_confirm_tap={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":32,"pressed":true)]
+}
+
+[physics]
+common/physics_ticks_per_second=60
+3d/default_gravity=18.0
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+textures/default_filters/texture_mipmap_bias=0.0
+anti_aliasing/quality/msaa_3d=0
+anti_aliasing/quality/screen_space_aa=0
+scaling_3d/mode=0
+lights_and_shadows/directional_shadow/size=1024
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)
+environment/defaults/default_environment="res://world/night.tres"

@@ -1,0 +1,18 @@
+[gd_resource type="Environment" format=3]
+
+; Barangay night. Blacks must reach true black, so ambient is fully disabled
+; and the only light in the world comes from lamps the player can see.
+[resource]
+background_mode = 1
+background_color = Color(0, 0, 0, 1)
+ambient_light_source = 1
+ambient_light_color = Color(0, 0, 0, 1)
+ambient_light_energy = 0.0
+tonemap_mode = 0
+fog_enabled = true
+fog_mode = 1
+fog_light_color = Color(0.09, 0.075, 0.045, 1)
+fog_light_energy = 1.0
+fog_density = 0.055
+fog_sky_affect = 0.0
+adjustment_enabled = false

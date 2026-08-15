@@ -1,0 +1,6 @@
+# Godot
+.godot/
+build/
+# never commit signing material
+*.keystore
+*.jks
