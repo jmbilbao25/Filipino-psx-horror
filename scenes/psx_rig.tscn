@@ -1,17 +1,47 @@
 [gd_scene load_steps=5 format=3]
 
 ; The low-res rig. All 3D content goes under the "World" SubViewport (320x180),
-; which is blown up to the screen with nearest-neighbour and run through post.gdshader.
+; which is blown up to the screen with nearest-neighbour and run through
+; post.gdshader.
+;
+; Root is a Control, not a plain Node: `Screen` is a Control and anchors only
+; resolve reliably against a Control parent. Under a bare Node its rect came
+; from the viewport implicitly, which is one more thing that can differ between
+; desktop GL and mobile GLES.
 
 [ext_resource type="Shader" path="res://shaders/post.gdshader" id="1_post"]
 
 [sub_resource type="GDScript" id="1_rig"]
-script/source = "extends Node
+script/source = "extends Control
 
 ## 0 = calm (warm amber), 1 = full tension (red cast, more grain and fringing).
 func set_tension(t: float) -> void:
 	var m: ShaderMaterial = ($Screen as TextureRect).material
-	m.set_shader_parameter(&\"tension\", clampf(t, 0.0, 1.0))
+	if m != null:
+		m.set_shader_parameter(&\"tension\", clampf(t, 0.0, 1.0))
+
+
+## Post-processing off = the raw 320x180 image, straight to the screen.
+## Exists because a real device rendered the whole post chain black while every
+## desktop capture was correct, and a bypass is the only way to tell from the
+## outside whether the shader or the viewport is at fault.
+func set_post(on: bool) -> void:
+	var s := $Screen as TextureRect
+	if on:
+		if s.material == null:
+			var m := ShaderMaterial.new()
+			m.shader = load(\"res://shaders/post.gdshader\")
+			s.material = m
+	else:
+		s.material = null
+
+
+## One line in logcat that says whether the chain is actually wired up.
+func report() -> String:
+	var vp := $World as SubViewport
+	var s := $Screen as TextureRect
+	return \"rig: screen_size=%v vp_size=%v tex=%s mat=%s\" % [
+		s.size, vp.size, s.texture != null, s.material != null]
 "
 
 [sub_resource type="ShaderMaterial" id="2_post"]
@@ -20,7 +50,13 @@ shader = ExtResource("1_post")
 [sub_resource type="ViewportTexture" id="3_vp"]
 viewport_path = NodePath("World")
 
-[node name="PsxRig" type="Node"]
+[node name="PsxRig" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 script = SubResource("1_rig")
 
 [node name="World" type="SubViewport" parent="."]
@@ -40,6 +76,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 texture = SubResource("3_vp")
 expand_mode = 1
 stretch_mode = 5

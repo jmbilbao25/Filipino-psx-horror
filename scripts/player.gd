@@ -36,7 +36,7 @@ const TILT := -0.192
 ## 0.0 still, ~0.4 walking, ~1.0 sprinting. The aswang's hearing radius is
 ## hear_base + hear_gain * noise^2, so this single float is the stealth system.
 var noise := 0.0
-var flashlight_on := false
+var flashlight_on := true  # on at spawn: a black first frame reads as a crash
 var battery := 1.0
 var alive := true
 
@@ -84,7 +84,7 @@ func _ready() -> void:
 	torch.shadow_enabled = true
 	torch.shadow_bias = 0.08
 	torch.shadow_normal_bias = 1.2
-	torch.visible = false
+	torch.visible = true
 	cam.add_child(torch)
 
 

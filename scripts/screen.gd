@@ -21,11 +21,18 @@ var _was := true
 
 func _ready() -> void:
 	Sfx.ambience(false)  # crickets belong to gameplay, not to a menu
+	add_child(Beacon.new())
+	_apply_plain()
 	($Rig as Node).call(&"set_tension", tension)
+	print("[screen] ", ($Rig as Node).call(&"report"))
 	if sting != &"":
 		Sfx.play(sting)
 	if next_scene == "res://scenes/game.tscn":
 		Game.reset()
+
+
+func _apply_plain() -> void:
+	($Rig as Node).call(&"set_post", not Game.plain)
 
 
 ## Keys are POLLED with an explicit edge, not taken from _input: Input.action_press()
@@ -42,10 +49,23 @@ func _process(_delta: float) -> void:
 
 ## Touch, which does arrive as an event. Mouse clicks land here too:
 ## project.godot has emulate_touch_from_mouse on.
+##
+## The top-right corner toggles the post-processing bypass instead of starting.
+## That corner is a diagnostic, not a feature: it is how a player on a device I
+## cannot reproduce tells me whether the shader chain is what is going black.
 func _unhandled_input(e: InputEvent) -> void:
-	if e is InputEventScreenTouch and (e as InputEventScreenTouch).pressed:
-		get_viewport().set_input_as_handled()
-		_go()
+	if not (e is InputEventScreenTouch and (e as InputEventScreenTouch).pressed):
+		return
+	get_viewport().set_input_as_handled()
+	var p := (e as InputEventScreenTouch).position
+	var vp := get_viewport().get_visible_rect().size
+	if p.x > vp.x * 0.78 and p.y < vp.y * 0.14:
+		Game.plain = not Game.plain
+		_apply_plain()
+		Sfx.play(&"ui")
+		print("[screen] plain=", Game.plain, "  ", ($Rig as Node).call(&"report"))
+		return
+	_go()
 
 
 func _go() -> void:

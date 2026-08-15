@@ -10,6 +10,8 @@ extends Node
 
 func _ready() -> void:
 	Game.reset()
+	add_child(Beacon.new())
+	($Rig as Node).call(&"set_post", not Game.plain)
 	var world: Node = $Rig/World
 
 	var barangay := Barangay.new()
@@ -27,6 +29,18 @@ func _ready() -> void:
 		world.add_child(Charm.make(i, barangay.charm_spots[i]))
 	world.add_child(Charm.Door.make(barangay.chapel_door))
 
+	# A trace of moonlight. Without it the barangay measures 91% pure #000000 at
+	# spawn with the torch off, which is indistinguishable from a broken build --
+	# and the blind critic independently flagged the same thing ("80% of the frame
+	# is empty black; no subject, no silhouette"). Low enough that the reference's
+	# crushed blacks survive, high enough that rooflines and palms read.
+	var moon := DirectionalLight3D.new()
+	moon.rotation = Vector3(deg_to_rad(-52.0), deg_to_rad(38.0), 0.0)
+	moon.light_color = Color(0.42, 0.50, 0.78)
+	moon.light_energy = 0.16
+	moon.shadow_enabled = false
+	world.add_child(moon)
+
 	var aswang := Aswang.new()
 	aswang.position = _far_from(barangay.patrol_points, barangay.player_start.origin)
 	world.add_child(aswang)
@@ -35,6 +49,7 @@ func _ready() -> void:
 	# from here, so the picture reddens and grains up as it closes on you.
 	Game.tension_changed.connect(Callable($Rig, "set_tension"))
 	Sfx.ambience(true)
+	print("[game] ", ($Rig as Node).call(&"report"))
 
 
 static func _far_from(points: Array[Vector3], from: Vector3) -> Vector3:

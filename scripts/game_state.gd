@@ -9,6 +9,11 @@ const TOTAL_CHARMS := 3
 
 var charms := 0
 var alive := true
+## Post-processing bypass. Set from the title screen, persists across scenes.
+## A real device rendered the post chain black while every desktop capture was
+## correct, so shipping a way to switch it off is the only way to tell which
+## half is broken from the outside.
+var plain := false
 ## 0 = calm, 1 = the aswang is on you. Audio and post-processing both read this.
 var tension := 0.0:
 	set(v):
