@@ -1,0 +1,33 @@
+# The real game, rendered through the PSX rig. Title -> barangay -> walk the
+# road with the torch on -> look around -> sprint. These are the frames a critic
+# should judge, because they are what the player actually sees.
+wait 1.0
+shot title
+tap ui_confirm_tap
+wait 2.5
+shot spawn_road
+tap flashlight
+wait 1.0
+shot torch_road
+move 0 -1
+wait 4.0
+shot walking_road
+look 380 0
+wait 1.0
+shot look_side
+move -1 -1
+wait 4.0
+shot among_huts
+look 380 0
+wait 1.0
+shot huts_turn
+press sprint
+move 0 -1
+wait 5.0
+shot sprint_down_road
+release sprint
+move 0 0
+look 300 40
+wait 1.5
+shot toward_chapel
+quit

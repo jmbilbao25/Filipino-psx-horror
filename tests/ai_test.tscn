@@ -1,0 +1,171 @@
+[gd_scene load_steps=4 format=3 uid="uid://c0aswangtest01"]
+
+[sub_resource type="GDScript" id="Arena"]
+script/source = "extends Node3D
+## Self-contained AI arena: flat ground, box walls that break line of sight, a
+## baked NavigationRegion3D, one Aswang, the 3 charms, the chapel door.
+## Nothing from world/ or scenes/ is touched, so this runs while other pieces
+## are still being written.
+
+## [centre, size] boxes. The long wall hides the aswang from the player's start.
+const WALLS := [
+	[Vector3(-3, 1.5, -3), Vector3(14, 3, 0.6)],
+	[Vector3(11, 1.5, -9), Vector3(0.6, 3, 9)],
+	[Vector3(-9, 1.5, -10), Vector3(6, 3, 0.6)],
+	[Vector3(3, 1.5, -16), Vector3(7, 3, 0.6)],
+]
+
+func _ready() -> void:
+	Game.reset()
+	Sfx.ambience(true)
+	# The capture harness counts 30 nominal fps but llvmpipe runs this arena at
+	# ~140, so its 8 s script is only ~1.7 s of game time. Fast-forward instead of
+	# distorting the AI knobs into something unrecognisable.
+	Engine.time_scale = 4.0
+
+	var nav := NavigationRegion3D.new()
+	var nm := NavigationMesh.new()
+	nm.agent_radius = 0.5
+	nm.agent_height = 2.0
+	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	nav.navigation_mesh = nm
+	add_child(nav)
+	_ground(nav)
+	for w in WALLS:
+		_solid(nav, w[0], w[1], &'concrete', Color(0.40, 0.39, 0.36))
+	nav.bake_navigation_mesh(false)
+	print('[test] navmesh polygons=', nav.navigation_mesh.get_polygon_count())
+
+	# Psx surfaces are vertex-lit with ambient disabled, so a screenshot is only
+	# legible if a real light hits the floor. Deliberately NOT the game's night
+	# lighting -- the look belongs to the shader and environment pieces.
+	var moon := DirectionalLight3D.new()
+	moon.rotation = Vector3(-1.15, 0.6, 0)
+	moon.light_energy = 1.6
+	moon.shadow_enabled = false
+	moon.light_color = Color(0.62, 0.68, 0.85)
+	add_child(moon)
+	var lamp := OmniLight3D.new()
+	lamp.position = Vector3(0, 5, -6)
+	lamp.light_color = Color(1.0, 0.72, 0.35)
+	lamp.light_energy = 5.0
+	lamp.omni_range = 24.0
+	add_child(lamp)
+
+	var cam := Camera3D.new()
+	cam.position = Vector3(0, 16, 16)
+	cam.fov = 60.0
+	add_child(cam)
+	cam.look_at(Vector3(0, 0.5, -4))
+
+	var a := Aswang.new()
+	a.position = Vector3(0, 0.3, -8)
+	a.debug_log = true
+	# Test pacing only. 25 s of quiet is right for the game and useless inside an
+	# 8 s capture, so the knobs are squeezed to make every state fire on camera.
+	a.opening_quiet = 1.5
+	a.hunt_cooldown = 20.0
+	a.max_hunt = 10.0
+	a.patrol_radius = 4.0
+	a.hear_base = 8.0   # test only: hears the walk at ~11 m so the chain fits the window
+	a.lurk_min_dist = 12.0
+	a.lurk_dwell = 2.0
+	add_child(a)
+
+	add_child(Charm.make(Charm.Kind.ASIN, Vector3(-7, 0, 3)))
+	add_child(Charm.make(Charm.Kind.BAWANG, Vector3(8, 0, 2)))
+	add_child(Charm.make(Charm.Kind.BUNTOT_PAGI, Vector3(6, 0, -12)))
+	add_child(Charm.Door.make(Vector3(-14, 0, -8)))
+
+
+## Subdivided plane: vertex lighting and affine UVs both need small triangles,
+## otherwise the whole floor swims and the omni light banks in diagonal stripes.
+func _ground(parent: Node) -> void:
+	var b := StaticBody3D.new()
+	var mi := MeshInstance3D.new()
+	var pl := PlaneMesh.new()
+	pl.size = Vector2(60, 60)
+	pl.subdivide_width = 59
+	pl.subdivide_depth = 59
+	mi.mesh = pl
+	var dirt := Psx.mat(&'dirt', Color(1.3, 1.2, 1.0)).duplicate() as Material
+	if dirt is ShaderMaterial:
+		dirt.set_shader_parameter(&'uv_scale', 30.0)
+	mi.material_override = dirt
+	b.add_child(mi)
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = Vector3(60, 1, 60)
+	cs.shape = sh
+	cs.position = Vector3(0, -0.5, 0)
+	b.add_child(cs)
+	parent.add_child(b)
+
+
+func _solid(parent: Node, pos: Vector3, size: Vector3, kind: StringName, tint: Color) -> void:
+	var b := StaticBody3D.new()
+	b.position = pos
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = Psx.mat(kind, tint)
+	b.add_child(mi)
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = size
+	cs.shape = sh
+	b.add_child(cs)
+	parent.add_child(b)
+"
+
+[sub_resource type="GDScript" id="Stub"]
+script/source = "extends CharacterBody3D
+## 20-line stand-in for the real player: group, noise, flashlight_on, die().
+
+var noise := 0.0
+var flashlight_on := true
+
+func _ready() -> void:
+	add_to_group(&'player')
+	var mi := MeshInstance3D.new()
+	var cap := CapsuleMesh.new()
+	cap.radius = 0.35
+	cap.height = 1.7
+	mi.mesh = cap
+	mi.position = Vector3(0, 0.85, 0)
+	mi.material_override = Psx.mat(&'cloth', Color(1.2, 1.1, 0.95))
+	add_child(mi)
+
+func _physics_process(delta: float) -> void:
+	var v := Input.get_vector(&'move_left', &'move_right', &'move_up', &'move_down')
+	var run := Input.is_action_pressed(&'sprint')
+	if Input.is_action_just_pressed(&'flashlight'):
+		flashlight_on = not flashlight_on
+	var spd := 4.6 if run else 2.6
+	velocity.x = v.x * spd
+	velocity.z = v.y * spd
+	velocity.y = 0.0 if is_on_floor() else velocity.y - 18.0 * delta
+	move_and_slide()
+	noise = 0.0 if v.is_zero_approx() else (1.0 if run else 0.4)
+	if not v.is_zero_approx():
+		rotation.y = atan2(-v.x, -v.y)
+
+func die() -> void:
+	print('[stub] player died')
+"
+
+[sub_resource type="CapsuleShape3D" id="Cap"]
+radius = 0.35
+height = 1.7
+
+[node name="AiTest" type="Node3D"]
+script = SubResource("Arena")
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 10)
+script = SubResource("Stub")
+
+[node name="Shape" type="CollisionShape3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("Cap")

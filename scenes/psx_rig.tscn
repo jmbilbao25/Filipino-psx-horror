@@ -1,0 +1,44 @@
+[gd_scene load_steps=5 format=3]
+
+; The low-res rig. All 3D content goes under the "World" SubViewport (320x180),
+; which is blown up to the screen with nearest-neighbour and run through post.gdshader.
+
+[ext_resource type="Shader" path="res://shaders/post.gdshader" id="1_post"]
+
+[sub_resource type="GDScript" id="1_rig"]
+script/source = "extends Node
+
+## 0 = calm (warm amber), 1 = full tension (red cast, more grain and fringing).
+func set_tension(t: float) -> void:
+	var m: ShaderMaterial = ($Screen as TextureRect).material
+	m.set_shader_parameter(&\"tension\", clampf(t, 0.0, 1.0))
+"
+
+[sub_resource type="ShaderMaterial" id="2_post"]
+shader = ExtResource("1_post")
+
+[sub_resource type="ViewportTexture" id="3_vp"]
+viewport_path = NodePath("World")
+
+[node name="PsxRig" type="Node"]
+script = SubResource("1_rig")
+
+[node name="World" type="SubViewport" parent="."]
+size = Vector2i(320, 180)
+render_target_update_mode = 3
+msaa_3d = 0
+screen_space_aa = 0
+use_taa = false
+use_debanding = false
+positional_shadow_atlas_size = 1024
+
+[node name="Screen" type="TextureRect" parent="."]
+texture_filter = 1
+material = SubResource("2_post")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = SubResource("3_vp")
+expand_mode = 1

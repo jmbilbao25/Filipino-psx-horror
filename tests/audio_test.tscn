@@ -1,0 +1,157 @@
+[gd_scene load_steps=2 format=3 uid="uid://c0audiotest001"]
+
+[sub_resource type="GDScript" id="AudioTest"]
+script/source = "extends Node3D
+## Exercises the whole Sfx API through the capture harness and asserts the
+## things that would actually be broken. Runs with --audio-driver Dummy: the
+## point is zero runtime errors plus real numbers, not listening.
+##
+## Run:  AUDIO_DUMP=/projects/work/audio_out ./tools/capture.sh tests/audio_test.txt out 640x360
+
+const NAMES := [
+	&'footstep', &'footstep_run', &'pickup', &'scare', &'breath',
+	&'gate', &'win', &'lose', &'ui',
+]
+
+var _label: Label
+var _fails := 0
+var _checks := 0
+
+
+func _ready() -> void:
+	# The tik-tik repeat interval is 0.85-3.6 s of game time and the harness
+	# counts frames, not seconds, so at llvmpipe's frame rate a 30-frame hold is
+	# only ~0.15 s and no call would ever fire. Fast-forward instead of shrinking
+	# the interval into something unrecognisable. Same trick as tests/ai_test.
+	Engine.time_scale = 12.0
+	# A listener, so play_at is exercised the way the game exercises it.
+	var cam := Camera3D.new()
+	cam.position = Vector3(0, 1.6, 0)
+	add_child(cam)
+	var cl := CanvasLayer.new()
+	_label = Label.new()
+	_label.position = Vector2(8, 8)
+	cl.add_child(_label)
+	add_child(cl)
+	_run()
+
+
+func _say(s: String) -> void:
+	print('[audio] ', s)
+	_label.text = s
+
+
+func _ck(name: String, ok: bool, detail: String) -> void:
+	_checks += 1
+	if not ok:
+		_fails += 1
+	print('[audio] %s %-28s %s' % ['PASS' if ok else 'FAIL', name, detail])
+
+
+func _wait(frames: int) -> void:
+	for _i in frames:
+		await get_tree().process_frame
+
+
+func _run() -> void:
+	await _wait(2)
+	_say('ambience(true)')
+	Sfx.ambience(true)
+	await _wait(4)
+
+	for n in NAMES:
+		_say('play(%s)' % n)
+		Sfx.play(n)
+		await _wait(4)
+
+	_say('play_at(scare, (4,1,-8))')
+	Sfx.play_at(&'scare', Vector3(4, 1, -8))
+	await _wait(4)
+	_say('play_at(pickup, (-6,1,3))')
+	Sfx.play_at(&'pickup', Vector3(-6, 1, 3))
+	await _wait(4)
+
+	# --- tension ------------------------------------------------------------
+	var m0: Dictionary = {}
+	var m1: Dictionary = {}
+	for t in [0.0, 0.5, 1.0]:
+		Sfx.set_tension(t)
+		var m := Sfx.mix()
+		_say('set_tension(%.1f)' % t)
+		print('[audio] MIX t=%.1f crickets=%+.1fdB (%.4f lin) heart=%+.1fdB (%.4f lin) drone=%+.1fdB breath=%+.1fdB rate=%.2fx' % [
+			t, m.crickets, db_to_linear(m.crickets), m.heart, db_to_linear(m.heart),
+			m.drone, m.breath, m.heart_rate])
+		if t == 0.0:
+			m0 = m
+		elif t == 1.0:
+			m1 = m
+		await _wait(6)
+	_ck('crickets duck with tension', m1.crickets < m0.crickets - 12.0,
+		'%.1f -> %.1f dB (%.4f -> %.4f lin)' % [m0.crickets, m1.crickets,
+			db_to_linear(m0.crickets), db_to_linear(m1.crickets)])
+	_ck('heartbeat rises with tension', m1.heart > m0.heart + 12.0,
+		'%.1f -> %.1f dB (%.4f -> %.4f lin)' % [m0.heart, m1.heart,
+			db_to_linear(m0.heart), db_to_linear(m1.heart)])
+	_ck('sub drone comes in', m1.drone > m0.drone + 12.0,
+		'%.1f -> %.1f dB' % [m0.drone, m1.drone])
+	_ck('breath rises with tension', m1.breath > m0.breath + 12.0,
+		'%.1f -> %.1f dB' % [m0.breath, m1.breath])
+	_ck('heart rate rises', m1.heart_rate > m0.heart_rate,
+		'%.2fx -> %.2fx' % [m0.heart_rate, m1.heart_rate])
+	Sfx.set_tension(0.25)
+
+	# --- the tik-tik inversion ----------------------------------------------
+	var ds := [INF, 60.0, 40.0, 20.0, 10.0, 4.0, 1.0]
+	var gs := []
+	for d in ds:
+		Sfx.set_aswang_distance(d)
+		var g: float = Sfx.tik_gain(d)
+		gs.append(g)
+		_say('set_aswang_distance(%.0f) -> tik gain %.4f' % [d, g])
+		print('[audio] TIK d=%6.1fm gain=%.4f (%+.1f dB) every %.2fs %s' % [d, g,
+			linear_to_db(g) if g > 0.0 else -INF, Sfx.tik_interval(g),
+			'silent' if g <= 0.0 else 'calling'])
+		await _wait(60)
+	_ck('INF = no call', gs[0] == 0.0, 'gain=%.4f' % gs[0])
+	var mono := true
+	for i in range(2, gs.size()):
+		if gs[i] > gs[i - 1]:
+			mono = false
+	_ck('gain falls as distance falls', mono,
+		'40m=%.4f 20m=%.4f 10m=%.4f 4m=%.4f 1m=%.4f' % [gs[2], gs[3], gs[4], gs[5], gs[6]])
+	_ck('strictly decreasing 40>20>10', gs[2] > gs[3] and gs[3] > gs[4],
+		'%.4f > %.4f > %.4f' % [gs[2], gs[3], gs[4]])
+	_ck('silent at very close range', gs[5] == 0.0 and gs[6] == 0.0,
+		'4m=%.4f 1m=%.4f' % [gs[5], gs[6]])
+	_ck('loud when far', gs[1] == 1.0 and gs[2] == 1.0, '60m=%.4f 40m=%.4f' % [gs[1], gs[2]])
+	var iv := []
+	for g in gs:
+		iv.append(Sfx.tik_interval(g))
+	_ck('calls get rarer as it closes',
+		iv[2] < iv[3] and iv[3] < iv[4],
+		'40m every %.2fs, 20m every %.2fs, 10m every %.2fs' % [iv[2], iv[3], iv[4]])
+	Sfx.set_aswang_distance(INF)
+
+	# --- teardown / robustness ---------------------------------------------
+	_say('ambience(false)')
+	Sfx.ambience(false)
+	await _wait(4)
+	Sfx.play(&'ui')
+	Sfx.play(&'not_a_sound')      # must warn, never error
+	Sfx.play_at(&'not_a_sound', Vector3.ZERO)
+	Sfx.set_tension(-3.0)
+	Sfx.set_tension(99.0)
+	Sfx.set_aswang_distance(-5.0)
+	Sfx.set_aswang_distance(NAN)
+	Sfx.ambience(false)
+	Sfx.ambience(true)
+	await _wait(6)
+	_ck('tension clamped', Sfx.mix().crickets == Sfx.mix().crickets, 'no NaN in mix')
+	_ck('NaN distance is silent', Sfx.tik_gain(NAN) == 0.0, 'gain=0')
+
+	_say('%d checks, %d failed' % [_checks, _fails])
+	print('[audio] RESULT ', 'ALL PASS' if _fails == 0 else '%d FAILED' % _fails)
+"
+
+[node name="AudioTest" type="Node3D"]
+script = SubResource("AudioTest")

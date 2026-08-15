@@ -1,0 +1,10 @@
+scene res://tests/world_test.tscn
+wait 1.5
+shot road
+look 400 0
+wait 0.8
+shot huts
+look 400 0
+wait 0.8
+shot court
+quit

@@ -1,0 +1,12 @@
+scene res://tests/audio_test.tscn
+wait 0.6
+shot audio_boot
+wait 2.0
+shot audio_oneshots
+wait 2.0
+shot audio_tension
+wait 20.0
+shot audio_tiktik
+wait 2.0
+shot audio_end
+quit

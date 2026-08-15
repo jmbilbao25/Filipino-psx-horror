@@ -1,0 +1,7 @@
+scene res://tests/shader_test.tscn
+wait 1.0
+shot psx_static
+look 140 0
+wait 0.6
+shot psx_turned
+quit

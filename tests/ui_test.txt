@@ -1,0 +1,53 @@
+# UI / controls capture: title -> gameplay (HUD + touch layer) -> flashlight
+# -> walk -> sprint -> look -> buttons -> lose -> win.
+# Every step goes through the SAME InputMap actions the phone's touch layer
+# presses, which is the point: nothing here is touch-only.
+wait 0.8
+shot title
+tap ui_confirm_tap
+wait 0.6
+scene res://tests/ui_test.tscn
+wait 1.2
+shot hud_torch_off
+tap flashlight
+wait 0.6
+shot hud_torch_on
+move 0 -1
+wait 6.0
+shot walking
+press sprint
+wait 3.0
+shot sprinting
+release sprint
+move 0 0
+wait 0.6
+look 500 0
+wait 0.6
+shot looked_right
+press interact
+wait 0.4
+shot buttons_lit
+release interact
+# ui_confirm_tap is wired in ui_test.tscn to fake a left thumb landing and
+# dragging: the joystick must appear under it and press the same move_* actions.
+tap ui_confirm_tap
+wait 0.4
+shot touch_joystick
+wait 4.0
+shot touch_walked
+tap ui_confirm_tap
+wait 0.4
+tap flashlight
+wait 0.6
+shot torch_off_again
+scene res://scenes/lose.tscn
+wait 1.0
+shot lose
+# proves the menus' tap-to-continue actually fires: this must land on the title
+tap ui_confirm_tap
+wait 1.2
+shot lose_confirmed
+scene res://scenes/win.tscn
+wait 1.0
+shot win
+quit

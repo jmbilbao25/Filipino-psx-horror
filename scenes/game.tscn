@@ -1,6 +1,37 @@
-[gd_scene load_steps=2 format=3 uid="uid://bgamescene01"]
+[gd_scene load_steps=7 format=3 uid="uid://bgamescene01"]
 
-[ext_resource type="Script" path="res://scripts/game.gd" id="1"]
+; The whole game. Everything 3D plus the diegetic HUD lives inside the rig's
+; World SubViewport (320x180) so it all gets the same dither/posterise/scanline/
+; CRT treatment. Only the touch layer sits above, at full resolution, so fingers
+; stay accurate.
 
-[node name="Game" type="Node3D"]
-script = ExtResource("1")
+[ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
+[ext_resource type="PackedScene" path="res://scenes/psx_rig.tscn" id="2_rig"]
+[ext_resource type="Environment" path="res://world/night.tres" id="3_env"]
+[ext_resource type="Script" path="res://scripts/player.gd" id="4_player"]
+[ext_resource type="Script" path="res://ui/hud.gd" id="5_hud"]
+[ext_resource type="Script" path="res://ui/touch_ui.gd" id="6_touch"]
+
+[node name="Game" type="Node"]
+script = ExtResource("1_game")
+
+[node name="Rig" parent="." instance=ExtResource("2_rig")]
+
+[node name="env" type="WorldEnvironment" parent="Rig/World"]
+environment = ExtResource("3_env")
+
+[node name="Player" type="CharacterBody3D" parent="Rig/World"]
+script = ExtResource("4_player")
+
+[node name="Hud" type="Control" parent="Rig/World"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("5_hud")
+
+[node name="Touch" type="CanvasLayer" parent="."]
+layer = 2
+
+[node name="TouchUi" type="Control" parent="Touch"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("6_touch")

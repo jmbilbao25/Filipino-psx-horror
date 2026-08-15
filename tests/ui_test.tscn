@@ -1,0 +1,159 @@
+[gd_scene load_steps=5 format=3 uid="uid://c0uitest01"]
+
+; UI / controls test. Self-contained: a patch of dirt, two walls, one sodium
+; lamp, the psx rig, the REAL Player, the diegetic HUD inside the 320x180
+; SubViewport and the touch layer on a CanvasLayer above the post chain.
+; Nothing from world/ or scripts/aswang.gd is referenced.
+
+[ext_resource type="PackedScene" path="res://scenes/psx_rig.tscn" id="1_rig"]
+[ext_resource type="Environment" path="res://world/night.tres" id="2_env"]
+[ext_resource type="Script" path="res://scripts/player.gd" id="3_player"]
+[ext_resource type="Script" path="res://ui/hud.gd" id="4_hud"]
+[ext_resource type="Script" path="res://ui/touch_ui.gd" id="5_touch"]
+
+[sub_resource type="GDScript" id="1_test"]
+script/source = "extends Node
+
+## Ground, walls and the one streetlight are built here so the scene file stays
+## small and nothing outside this piece is needed. One charm is pre-collected so
+## the HUD shows both a filled and an empty slot.
+
+var _p: Player
+var _t := 0.0
+var _was := false
+var _thumb := false
+var _tap := true
+
+func _ready() -> void:
+	Game.reset()
+	Game.collect_charm()
+	Sfx.ambience(true)
+	_p = $Rig/World/Player
+	var w := $Rig/World as Node
+	_ground(w)
+	_wall(w, Vector3(0, 1.6, -3), Vector3(16, 3.2, 0.5))
+	_wall(w, Vector3(-8, 1.6, 1), Vector3(0.5, 3.2, 8))
+	_wall(w, Vector3(1.4, 0.45, 1.6), Vector3(0.9, 0.9, 0.9))
+	# One sodium streetlight: a pool of amber, everything outside it stays black.
+	var lamp := OmniLight3D.new()
+	lamp.position = Vector3(9.0, 4.2, 5.5)
+	lamp.light_color = Color(1.0, 0.66, 0.26)
+	lamp.light_energy = 3.5
+	lamp.omni_range = 10.0
+	lamp.omni_attenuation = 1.8
+	lamp.shadow_enabled = false
+	w.add_child(lamp)
+	_say('READY')
+
+## Prints on every movement-axis transition, so BEFORE/AFTER around a harness
+## `move` step is exact rather than whatever the 0.5 s heartbeat happened to
+## catch. A screenshot cannot prove the player moved; these two lines can.
+func _process(delta: float) -> void:
+	var tap := Input.is_action_pressed(&'ui_confirm_tap')
+	if tap and not _tap:
+		_thumb_toggle()
+	_tap = tap
+	var on := not Input.get_vector(&'move_left', &'move_right', &'move_up', &'move_down').is_zero_approx()
+	if on != _was:
+		_was = on
+		_say('MOVE START (before)' if on else 'MOVE STOP  (after)')
+	_t += delta
+	if _t < 0.5:
+		return
+	_t = 0.0
+	_say('tick')
+
+## The harness can only press InputMap actions, so the touch path -- the actual
+## deliverable -- would otherwise go untested. Each `tap ui_confirm_tap` toggles a
+## synthetic left thumb: down + drag, then release. If the stick is wired right
+## the knob appears under that point and the SAME move_* actions get pressed.
+func _thumb_toggle() -> void:
+	var at := get_viewport().get_visible_rect().size * Vector2(0.22, 0.62)
+	_thumb = not _thumb
+	var t := InputEventScreenTouch.new()
+	t.index = 0
+	t.pressed = _thumb
+	t.position = at
+	Input.parse_input_event(t)
+	if not _thumb:
+		_say('THUMB UP')
+		return
+	var d := InputEventScreenDrag.new()
+	d.index = 0
+	d.position = at + Vector2(-40, -95)
+	d.relative = Vector2(-40, -95)
+	Input.parse_input_event(d)
+	_say('THUMB DOWN at %v (before)' % at)
+
+func _say(tag: String) -> void:
+	print('[ui_test] %-20s pos=%v yaw=%+.1fdeg noise=%.2f torch=%s battery=%.3f' % [
+		tag, _p.global_position.snappedf(0.001), rad_to_deg(_p.rotation.y),
+		_p.noise, _p.flashlight_on, _p.battery])
+
+func _ground(parent: Node) -> void:
+	var b := StaticBody3D.new()
+	var mi := MeshInstance3D.new()
+	var pl := PlaneMesh.new()
+	pl.size = Vector2(40, 40)
+	pl.subdivide_width = 39
+	pl.subdivide_depth = 39
+	mi.mesh = pl
+	var dirt := Psx.mat(&'dirt').duplicate() as ShaderMaterial
+	dirt.set_shader_parameter(&'uv_scale', 20.0)
+	mi.material_override = dirt
+	b.add_child(mi)
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = Vector3(40, 1, 40)
+	cs.shape = sh
+	cs.position = Vector3(0, -0.5, 0)
+	b.add_child(cs)
+	parent.add_child(b)
+
+func _wall(parent: Node, pos: Vector3, size: Vector3) -> void:
+	var b := StaticBody3D.new()
+	b.position = pos
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	# Psx surfaces are vertex-lit, so a 3 m flashlight pool on a 16 m wall only
+	# resolves if the wall has vertices at that scale. Coarse quads turn the beam
+	# into a blocky wash -- this subdivision is what makes it read as a beam.
+	bm.subdivide_width = int(size.x * 3.0)
+	bm.subdivide_height = int(size.y * 3.0)
+	bm.subdivide_depth = int(size.z * 3.0)
+	mi.mesh = bm
+	mi.material_override = Psx.mat(&'concrete', Color(0.9, 0.85, 0.78))
+	b.add_child(mi)
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = size
+	cs.shape = sh
+	b.add_child(cs)
+	parent.add_child(b)
+"
+
+[node name="UiTest" type="Node"]
+script = SubResource("1_test")
+
+[node name="Rig" parent="." instance=ExtResource("1_rig")]
+
+[node name="env" type="WorldEnvironment" parent="Rig/World"]
+environment = ExtResource("2_env")
+
+[node name="Player" type="CharacterBody3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 4)
+script = ExtResource("3_player")
+
+[node name="Hud" type="Control" parent="Rig/World"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("4_hud")
+
+[node name="Touch" type="CanvasLayer" parent="."]
+layer = 2
+
+[node name="TouchUi" type="Control" parent="Touch"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("5_touch")

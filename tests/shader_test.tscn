@@ -1,0 +1,156 @@
+[gd_scene load_steps=13 format=3]
+
+; Shader look test: streetlight pool on dirt, a few props on every Psx kind.
+; Depends only on files the shader piece owns.
+
+[ext_resource type="PackedScene" path="res://scenes/psx_rig.tscn" id="1_rig"]
+[ext_resource type="Environment" path="res://world/night.tres" id="2_env"]
+
+[sub_resource type="GDScript" id="1_test"]
+script/source = "extends Node
+
+## Every MeshInstance3D is named after its Psx kind. uv_scale is derived from the
+## mesh size so the 32px textures stay chunky whatever the prop is.
+func _ready() -> void:
+	for n in ($Rig/World as Node).get_children():
+		if n is MeshInstance3D:
+			var mi := n as MeshInstance3D
+			var m: ShaderMaterial = Psx.mat(mi.name).duplicate()
+			m.set_shader_parameter(&\"uv_scale\", maxf(1.0, roundf(mi.get_aabb().size.length() * 0.5)))
+			mi.material_override = m
+	($Rig as Node).call(&\"set_tension\", 0.0)
+
+
+func _input(e: InputEvent) -> void:
+	if e is InputEventMouseMotion:
+		($Rig/World/cam as Camera3D).rotate_y(-(e as InputEventMouseMotion).relative.x * 0.004)
+		($Rig as Node).call(&\"set_tension\", 0.55)
+"
+
+[sub_resource type="PlaneMesh" id="2_ground"]
+size = Vector2(60, 60)
+subdivide_width = 60
+subdivide_depth = 60
+
+[sub_resource type="BoxMesh" id="3_wall"]
+size = Vector3(10, 3.2, 0.4)
+subdivide_width = 3
+subdivide_height = 1
+
+[sub_resource type="BoxMesh" id="4_crate"]
+size = Vector3(1.2, 1.2, 1.2)
+
+[sub_resource type="BoxMesh" id="5_fence"]
+size = Vector3(3.4, 2.2, 0.15)
+
+[sub_resource type="BoxMesh" id="6_roof"]
+size = Vector3(2.8, 0.18, 2.8)
+subdivide_width = 4
+subdivide_depth = 4
+
+[sub_resource type="CylinderMesh" id="7_post"]
+top_radius = 0.11
+bottom_radius = 0.11
+height = 2.8
+radial_segments = 7
+rings = 4
+
+[sub_resource type="CylinderMesh" id="8_drum"]
+top_radius = 0.36
+bottom_radius = 0.36
+height = 1.0
+radial_segments = 9
+rings = 3
+
+[sub_resource type="BoxMesh" id="9_card"]
+size = Vector3(1.6, 0.06, 1.6)
+
+[sub_resource type="BoxMesh" id="10_flat"]
+size = Vector3(0.9, 1.2, 0.06)
+
+[sub_resource type="CylinderMesh" id="11_body"]
+top_radius = 0.2
+bottom_radius = 0.26
+height = 1.7
+radial_segments = 8
+rings = 5
+
+[node name="ShaderTest" type="Node"]
+script = SubResource("1_test")
+
+[node name="Rig" parent="." instance=ExtResource("1_rig")]
+
+[node name="env" type="WorldEnvironment" parent="Rig/World"]
+environment = ExtResource("2_env")
+
+[node name="cam" type="Camera3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 0.99, 0.139, 0, -0.139, 0.99, 0, 1.6, 6)
+fov = 60.0
+near = 0.05
+far = 60.0
+
+[node name="dirt" type="MeshInstance3D" parent="Rig/World"]
+mesh = SubResource("2_ground")
+
+[node name="concrete" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, -8)
+mesh = SubResource("3_wall")
+
+[node name="wood" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(0.94, 0, -0.34, 0, 1, 0, 0.34, 0, 0.94, -1.9, 0.6, -1.6)
+mesh = SubResource("4_crate")
+
+[node name="rust" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(0.87, 0, 0.5, 0, 1, 0, -0.5, 0, 0.87, 5.2, 0.85, -3.4)
+mesh = SubResource("5_fence")
+
+[node name="thatch" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 2.1, -4.2)
+mesh = SubResource("6_roof")
+
+[node name="bamboo" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 1.4, -3.1)
+mesh = SubResource("7_post")
+
+[node name="metal" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.5, -0.4)
+mesh = SubResource("8_drum")
+
+[node name="leaf" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.6, 2.0, -5.2)
+mesh = SubResource("9_card")
+
+[node name="cloth" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0, 0.75, -3.4)
+mesh = SubResource("10_flat")
+
+[node name="cloth_dark" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 0.75, -3.9)
+mesh = SubResource("10_flat")
+
+[node name="glass" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.4, 1.7, -7.7)
+mesh = SubResource("10_flat")
+
+[node name="skin" type="MeshInstance3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.6, 0.85, -1.6)
+mesh = SubResource("11_body")
+
+[node name="spot" type="SpotLight3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 4.3, -1.5)
+light_color = Color(1, 0.9, 0.76, 1)
+light_energy = 48.0
+shadow_enabled = true
+shadow_bias = 0.06
+shadow_normal_bias = 1.5
+spot_range = 16.0
+spot_attenuation = 1.0
+spot_angle = 45.0
+spot_angle_attenuation = 0.2
+
+[node name="omni" type="OmniLight3D" parent="Rig/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 2.4, 1)
+light_color = Color(1, 0.86, 0.62, 1)
+light_energy = 12.0
+omni_range = 14.0
+omni_attenuation = 1.5

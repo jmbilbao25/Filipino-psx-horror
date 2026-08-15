@@ -1,0 +1,9 @@
+scene res://tests/ai_test.tscn
+wait 1.0
+shot ai_start
+move 0 -1
+wait 3.0
+shot ai_approach
+wait 4.0
+shot ai_hunt
+quit
