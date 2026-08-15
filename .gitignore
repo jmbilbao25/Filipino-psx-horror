@@ -4,3 +4,6 @@ build/
 # never commit signing material
 *.keystore
 *.jks
+
+# the published APK is committed on purpose (see dist/README.md)
+!dist/
